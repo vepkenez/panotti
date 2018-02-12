@@ -61,7 +61,7 @@
 31.35	31.5	doe-singing	
 31.5	31.65	doe-singing	
 31.65	31.8	doe-singing	
-31.8	31.95	warm-tone-bass	
+31.8	31.95	doe-singing	
 33.6	33.75	doe-singing	
 33.75	33.9	doe-singing	
 33.9	34.05	doe-singing	
@@ -83,6 +83,7 @@
 40.95	41.1	doe-singing	
 41.1	41.25	doe-singing	
 41.25	41.4	doe-singing	
+41.4	41.55	doe-singing	
 41.55	41.7	doe-singing	
 41.7	41.85	doe-singing	
 43.2	43.35	doe-singing	

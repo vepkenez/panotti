@@ -100,10 +100,11 @@ class LabelMaker(object):
         for k, v in self.label_lookup['start'].items():
             if k < sample_time and v['end'] > sample_time:
                 return v['name'], v['start'], v['end']
-
         # if the next label starts before the end of this current window, don't make a silence clip
-        if [s for s, e in self.ordered if s > sample_time][0] - sample_time < self.window_size:
-            return None, None, None
+        labels_after = [s for s, e in self.ordered if s > sample_time]
+        if labels_after:
+            if labels_after[0] - sample_time < self.window_size:
+                return None, None, None
         
         return 'silence', None, None
 

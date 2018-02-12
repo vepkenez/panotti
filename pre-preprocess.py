@@ -160,11 +160,8 @@ def handle_file(f):
 
 def process_rawdata():
     files =  [f for f in os.listdir('raw_data') if f.endswith('.wav')]
-    for f in files:
-        handle_file(f)
-    # pool = Pool(cpu_count)
-    # pool.map(handle_file, files)
-
+    pool = Pool(cpu_count)
+    pool.map(handle_file, files)
 
 
 if __name__ == '__main__':

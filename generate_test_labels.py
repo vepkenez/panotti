@@ -5,12 +5,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import *
 
-from panotti.models import *
+from panotti import models as sound_class
 from panotti.datautils import *
 from predict_class import predict_one
 
+from onsets.predict_class import predict_one as predict_onset
+from onsets.panotti import models as onsets
 
-model = load_model('weights.hdf5')
+onset_model = onsets.load_model('onsets/weights.hdf5')
+sound_model = sound_class.load_model('weights.hdf5')
 
 def test():
     class_names = get_class_names('Preproc/Test/')
@@ -29,6 +32,8 @@ def test():
             end = (i + increment)/44100
             half = increment/44100
             clip = librosa.util.fix_length(y[i:i+increment], increment)
+
+            print (predict_onset(clip, sr, onset_model))
             
             label = class_names[np.argmax(predict_one(clip, sr, model))]
             if not label == 'silence':

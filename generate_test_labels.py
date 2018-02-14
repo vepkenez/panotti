@@ -13,10 +13,19 @@ from onsets.predict_class import predict_one as predict_onset
 from onsets.panotti import models as onsets
 
 onset_model = onsets.load_model('onsets/weights.hdf5')
+
 sound_model = sound_class.load_model('weights.hdf5')
+
+def detect_onset(clip, sr):
+    pred = predict_onset(clip, sr, onset_model)
+    if ['no', 'yes'][np.argmax(pred)] == 'yes':
+        ons = librosa.onset.onset_detect(y=clip, sr=sr, units='samples')
+        if ons.any():
+            return ons[-1]
 
 def test():
     class_names = get_class_names('Preproc/Test/')
+    print(class_names)
 
     plt.figure(figsize=(12, 8))
     files =  tqdm([f for f in os.listdir('raw_data') if f.endswith('.wav')])
@@ -24,22 +33,39 @@ def test():
     for f in files:
         files.set_description("Processing %s" % f)
         path = (os.path.join('raw_data', f))
-        increment = int(44100 * .15)
+        stride = int(44100 * .02) # 20 milliseconds
+        onset_increment = int(44100 * .1)
+        sound_window = int(44100 * .15)
+        last_sound_sample = 0
+        min_sound_spacing = .06 * 44100
         y, sr  = librosa.load(path, 44100)
+        last_label = None
         outfile = open(os.path.join('raw_data/generated/', f.replace('.wav', '.txt')), 'w')
-        for i in range(0, len(y), increment):
-            start = i/44100
-            end = (i + increment)/44100
-            half = increment/44100
-            clip = librosa.util.fix_length(y[i:i+increment], increment)
+        for i in range(0, len(y), stride):
+            if i - last_sound_sample >= min_sound_spacing:                    
+                clip = librosa.util.fix_length(y[i:i+onset_increment], onset_increment)
+                onset = detect_onset(clip, sr)
+                if onset:
+                    soundclip = y[i+onset:i+onset+sound_window]
+                    start = (i+onset)/sr
+                    end = (i + onset + sound_window)/sr
+                    label = class_names[np.argmax(predict_one(soundclip, sr, sound_model))]
+                    if not (label=='lip-bass' and last_label=='lip-bass'):
+                        last_label = label
+                        outfile.write('\t'.join([str(start), str(end), label, '\n']))
+                        if not label == 'silence':
+                            last_sound_sample = i + onset
+                elif last_label == 'kicks':
+                    kick_time = .05
+                    kick_samples = int(kick_time*sr)
+                    soundclip = y[i+kick_samples:i+kick_samples+sound_window]
+                    label = class_names[np.argmax(predict_one(soundclip, sr, sound_model))]
+                    if label in ['lip-bass', 'high-hat']:
+                        outfile.write('\t'.join([str(start+kick_time), str(end+kick_time), label, '\n']))
+                        last_label = label
+                        last_sound_sample = i + kick_samples
 
-            print (predict_onset(clip, sr, onset_model))
-            
-            label = class_names[np.argmax(predict_one(clip, sr, model))]
-            if not label == 'silence':
-                ons = librosa.onset.onset_detect(y=clip, sr=44100, units='samples')/44100.
-                outfile.write('\t'.join([str(start), str(end), label, '\n']))
-        
+
         outfile.close()
               
 

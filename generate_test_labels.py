@@ -5,9 +5,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import *
 
+from constants import AUDIO_WINDOW_SAMPLES, SR
+
 from panotti import models as sound_class
 from panotti.datautils import *
 from predict_class import predict_one
+
+
+
 
 from onsets.predict_class import predict_one as predict_onset
 from onsets.panotti import models as onsets
@@ -33,13 +38,14 @@ def test():
     for f in files:
         files.set_description("Processing %s" % f)
         path = (os.path.join('raw_data', f))
-        stride = int(44100 * .02) # 20 milliseconds
-        onset_increment = int(44100 * .1)
-        sound_window = int(44100 * .15)
+        stride = int(SR * .02) # 20 milliseconds
+        onset_increment = int(SR * .1)
+        sound_window = AUDIO_WINDOW_SAMPLES
         last_sound_sample = 0
-        min_sound_spacing = .06 * 44100
-        y, sr  = librosa.load(path, 44100)
+        min_sound_spacing = .06 * SR # minimum resolution: 60 milliseconds =~ 1/32 note at 120bpm
+        y, sr  = librosa.load(path, SR)
         last_label = None
+
         outfile = open(os.path.join('raw_data/generated/', f.replace('.wav', '.txt')), 'w')
         for i in range(0, len(y), stride):
             if i - last_sound_sample >= min_sound_spacing:                    
@@ -49,7 +55,7 @@ def test():
                     soundclip = y[i+onset:i+onset+sound_window]
                     start = (i+onset)/sr
                     end = (i + onset + sound_window)/sr
-                    label = class_names[np.argmax(predict_one(soundclip, sr, sound_model))]
+                    label = class_names[np.argmax(predict_one(librosa.util.fix_length(soundclip, sound_window), sr, sound_model))]
                     if not (label=='lip-bass' and last_label=='lip-bass'):
                         last_label = label
                         outfile.write('\t'.join([str(start), str(end), label, '\n']))
@@ -59,7 +65,7 @@ def test():
                     kick_time = .05
                     kick_samples = int(kick_time*sr)
                     soundclip = y[i+kick_samples:i+kick_samples+sound_window]
-                    label = class_names[np.argmax(predict_one(soundclip, sr, sound_model))]
+                    label = class_names[np.argmax(predict_one(librosa.util.fix_length(soundclip, sound_window), sr, sound_model))]
                     if label in ['lip-bass', 'high-hat']:
                         outfile.write('\t'.join([str(start+kick_time), str(end+kick_time), label, '\n']))
                         last_label = label

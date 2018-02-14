@@ -1,4 +1,5 @@
 import os
+import shutil
 import librosa
 import librosa.display
 import numpy as np
@@ -192,13 +193,13 @@ def handle_file(f):
 
 def process_rawdata():
     for d in os.listdir('Samples'):
-        os.rmdir(os.path.join('Samples', d))
+        shutil.rmtree(os.path.join('Samples', d))
 
     for d in os.listdir('Preproc/Train'):
-        os.rmdir(os.path.join('Preproc/Train', d))
+        shutil.rmtree(os.path.join('Preproc/Train', d))
     
     for d in os.listdir('Preproc/Test'):
-        os.rmdir(os.path.join('Preproc/Test', d))
+        shutil.rmtree(os.path.join('Preproc/Test', d))
     
     files =  [f for f in os.listdir('raw_data') if f.endswith('.wav')]
     pool = Pool(cpu_count)

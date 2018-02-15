@@ -41,8 +41,9 @@ def test():
         sound_window = AUDIO_WINDOW_SAMPLES
         last_sound_sample = 0
         min_sound_spacing = .06 * SR # minimum resolution: 60 milliseconds =~ 1/32 note at 120bpm
-        y, sr  = librosa.load(path, SR)
         last_label = None
+        y, sr  = librosa.load(path, SR)
+        
 
         outfile = open(os.path.join('raw_data/generated/', f.replace('.wav', '.txt')), 'w')
         for i in range(0, len(y), stride):

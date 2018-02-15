@@ -1,16 +1,16 @@
 import sounddevice as sd
 import librosa
 import sys
+import time
 
 import numpy as np
 import sounddevice as sd
 
-
 from constants import SR, AUDIO_WINDOW_TIME, AUDIO_WINDOW_SAMPLES
 
 from panotti import models as sound_class
-from panotti.datautils import *
-from predict_class import predict_one
+from panotti.datautils import get_class_names as get_audio_classes
+from predict_class import predict_one as classify_audio
 
 from onsets.predict_class import predict_one as predict_onset
 from onsets.panotti import models as onsets
@@ -18,6 +18,13 @@ from onsets.constants import ONSET_WINDOW_TIME, ONSET_WINDOW_SAMPLES
 
 global filedata
 global sound
+global start
+
+start = None
+
+onset_model = onsets.load_model('onsets/weights.hdf5')
+sound_model = sound_class.load_model('weights.hdf5')
+
 
 class SoundWindow(object):
 
@@ -31,13 +38,12 @@ class SoundWindow(object):
             self.data = np.ndarray([])
         else:
             self.data = data
-        
-        self.onset_model = onsets.load_model('onsets/weights.hdf5')
-        self.sound_model = sound_class.load_model('weights.hdf5')
 
         self.last_sound_sample = 0
         self.min_sound_spacing = .06 * SR # minimum resolution: 60 milliseconds =~ 1/32 note at 120bpm
+
         self.last_label = None
+        self.class_names = get_audio_classes()
 
         super(SoundWindow, self).__init__()
 
@@ -57,29 +63,71 @@ class SoundWindow(object):
     def shape(self):
         return self.data.shape
 
+    @property
+    def size(self):
+        return self.data.size
+
     def detect_onset(self):
-        clip = self.data[-ONSET_WINDOW_SAMPLES:]
-        pred = predict_onset(clip, SR, self.onset_model)
+        self.sound_clip = self.data[-AUDIO_WINDOW_SAMPLES:]
+        clip = self.sound_clip[0: ONSET_WINDOW_SAMPLES]
+        clip = librosa.util.fix_length(
+                            clip, 
+                            ONSET_WINDOW_SAMPLES
+                        )
+        pred = predict_onset(clip, SR, onset_model)
         if ['no', 'yes'][np.argmax(pred)] == 'yes':
-            ons = librosa.onset.onset_detect(y=clip, sr=sr, units='samples')
+            ons = librosa.onset.onset_detect(y=clip, sr=SR, units='samples')
             if ons.any():
-                return ons[-1]
+                return ons[0]
 
-    def detect_sound(self):
+    def detect_sound(self, current_time):
+        time_stamp = current_time / SR
+        print (time_stamp)
+        if time_stamp - self.last_sound_sample > self.min_sound_spacing:
+            onset = self.detect_onset()
+            soundclip = self.sound_clip
+            if onset:
+                soundclip = soundclip[onset:]
+                label = self.class_names[
+                    np.argmax(
+                        classify_audio(
+                            librosa.util.fix_length(
+                                soundclip, 
+                                AUDIO_WINDOW_SAMPLES
+                            ), 
+                            SR, 
+                            sound_model
+                        )
+                    )
+                ]
+                print (time_stamp - self.last_sound_sample)
+                self.last_sound_sample = time_stamp
+                return label, onset
+
+        return None, None
+    
 
 
 
-def callback(indata, outdata, frames, time, status):
+
+def callback(indata, outdata, frames, timedata, status):
     global filedata
     global sound
-    sound.concat(indata)
-    sound_event = sound.detect_sound()
+    global start
 
+    if not start:
+        start = timedata.currentTime
+
+    sound.concat(indata)
+    sound_event, onset = sound.detect_sound(timedata.currentTime-start)
+    if sound_event:
+        print (sound_event, (sound.size-AUDIO_WINDOW_TIME)/SR)
 
 
 def main(filepath=None):
     global filedata
     global sound
+    global start
 
     blocksize = int(44100*.05)
 
@@ -87,13 +135,20 @@ def main(filepath=None):
         data, sr = librosa.load(filepath, sr=SR)
         duration = data.shape[0]/SR
         is_file = True
+       
+
     else:
         data = np.ndarray([])
-        duration = 5
+        duration = 10
         is_file = False
+
+    # warm up the models        
+    predict_onset(np.zeros(ONSET_WINDOW_SAMPLES), SR, onset_model)
+    classify_audio(np.zeros(AUDIO_WINDOW_SAMPLES), SR, sound_model)
     
     sound = SoundWindow(data, is_file=is_file, blocksize=blocksize)
 
+    print ("streaming")
     with sd.Stream(channels=1, callback=callback, samplerate = SR, blocksize=blocksize):
         sd.sleep(int(duration * 1000))
 

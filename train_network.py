@@ -39,7 +39,7 @@ def train_network(weights_file="weights.hdf5", classpath="Preproc/Train/", epoch
         serial_model=serial_model, period=2)
     #earlystopping = EarlyStopping(patience=12)
     logthis = keras.callbacks.TensorBoard(
-        log_dir='./logs/N-.15windows', 
+        log_dir='./logs/O-.15windows', 
         histogram_freq=50,
         batch_size=32, 
         write_graph=False,

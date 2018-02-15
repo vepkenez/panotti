@@ -11,11 +11,9 @@ from panotti import models as sound_class
 from panotti.datautils import *
 from predict_class import predict_one
 
-
-
-
 from onsets.predict_class import predict_one as predict_onset
 from onsets.panotti import models as onsets
+from onsets.constants import ONSET_WINDOW_TIME, ONSET_WINDOW_SAMPLES
 
 onset_model = onsets.load_model('onsets/weights.hdf5')
 
@@ -39,7 +37,7 @@ def test():
         files.set_description("Processing %s" % f)
         path = (os.path.join('raw_data', f))
         stride = int(SR * .02) # 20 milliseconds
-        onset_increment = int(SR * .1)
+        onset_increment = ONSET_WINDOW_SAMPLES
         sound_window = AUDIO_WINDOW_SAMPLES
         last_sound_sample = 0
         min_sound_spacing = .06 * SR # minimum resolution: 60 milliseconds =~ 1/32 note at 120bpm

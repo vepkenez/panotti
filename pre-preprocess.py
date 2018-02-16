@@ -159,7 +159,6 @@ def handle_file(f):
             label, labelstart, labelend = labelmaker.get_label(i)
 
             if label in LABELS:
-                print (labelstart, labelend, labelmaker.random)
                 output_file_sample_range(
                     y[labelstart : labelend], # the full range of the label
                     filepath, #source file,

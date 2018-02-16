@@ -56,7 +56,7 @@ def output_image(clip, sr, path):
 
 
 def output_file_sample_range(data, source_filename, start_sample, end_sample, sr, window_size, label, global_start_sample):
-    # print ('generating', source_filename, start_sample, end_sample, label, window_size, global_start_sample)
+
     if window_size > data.shape[0]:
         data = librosa.util.fix_length(data, window_size) #make sure it's at least the needed length
 
@@ -65,7 +65,8 @@ def output_file_sample_range(data, source_filename, start_sample, end_sample, sr
         end = window_size
     clip = data[0: end]
     
-    # print (clip.shape, 'starting at', global_start_sample)
+
+    # if the clip is longer than our window size, recurse
     if (len(clip)) > window_size:
         i = start_sample
         while i <= end_sample:
@@ -89,17 +90,14 @@ def output_file_sample_range(data, source_filename, start_sample, end_sample, sr
 
 class LabelMaker(object):
 
-
-    def __init__(self, filepath, f, sr, window_size):
+    def __init__(self, filepath, f, sr, window_size, random_offset):
         self.sr = np.int(sr)
-        self.window_size = window_size
-
-        self.random = self.window_size / 8 / SR
-        
-        labelpath = filepath.replace('.wav', '.txt')
-        labellines = open(labelpath, 'r').readlines()
+        self.window_size = window_size 
+        self.random = self.window_size * random_offset / sr # this is in seconds
         self.render_silence = False
 
+        # check to see if we are labeling all output 
+        # from this file with the filename as in 'kicks.wav' or 'lip-bass.wav'
         fileLabel = None
         for l in LABELS:
             if f.startswith(l) and l not in NO_SILENCE:
@@ -111,6 +109,10 @@ class LabelMaker(object):
             'end': {},
             'name': {}
         }
+
+        labelpath = filepath.replace('.wav', '.txt')
+        labellines = open(labelpath, 'r').readlines()
+        
         self.ordered = []
         for l in labellines:
             s, e, tag = l.split('\t')
@@ -130,11 +132,12 @@ class LabelMaker(object):
         for k, v in self.label_lookup['start'].items():
             if k < sample_time and v['end'] > sample_time:
                 # randomize the start a tad
-                random = abs(np.random.normal(self.random, self.random))
+                random = abs(np.random.normal(self.random, self.random)) * self.sr
                 start = int(v['start'] - random) 
+                
                 return v['name'], start, v['end']
-        # if the next label starts before the end of this current window, don't make a silence clip
 
+        # if the next label starts before the end of this current window, don't make a silence clip
         labels_after = [s for s, e in self.ordered if s > sample_time]
         if labels_after:
             if labels_after[0] - sample_time < self.window_size:
@@ -143,53 +146,47 @@ class LabelMaker(object):
         return 'silence', None, None
 
 def handle_file(f):
-    print ("doing", f)
-    render_silence = False
+
     filepath = os.path.join('raw_data', f)
     y, sr  = librosa.load(filepath, SR)
+    for random_offset in [.1, .4, .7]:
+        print ("doing", f, random_offset)
+        window_samples = AUDIO_WINDOW_SAMPLES
+        labelmaker = LabelMaker(filepath, f, sr, window_samples, random_offset)
+        
+        i = 0
+        while i < len(y):
+            label, labelstart, labelend = labelmaker.get_label(i)
 
-    window_samples = AUDIO_WINDOW_SAMPLES
-    labelMaker = LabelMaker(filepath, f, sr, window_samples)
-    
-    i = 0
-    while i < len(y):
-        start = i/SR
-        end = (i + window_samples)/SR
-        clip = librosa.util.fix_length(y[i:i+window_samples], window_samples)
-        outfile = 'Samples/silence/%s-%s-%s.wav'%(f.replace(' ','-'), str(start).replace('.', '_'), str(end).replace('.', '_'))
-        label = None
-
-        label, labelstart, labelend = labelMaker.get_label(i)
-
-        if label in LABELS:
-            
-            output_file_sample_range(
-                y[labelstart : labelend], # the full range of the label
-                filepath, #source file,
-                0, #start sample,
-                labelend - labelstart, # end sample
-                sr,
-                window_samples, # increment samples,
-                label,
-                labelstart #global start sample
-            )
-
-        # output this window interval of the original source 
-        if label == 'silence' and labelMaker.render_silence:
-            # print ('arbitrary range', i)
-            output_file_sample_range(
-                    y[i:i+window_samples], # the file
-                    filepath , #source file,
+            if label in LABELS:
+                print (labelstart, labelend, labelmaker.random)
+                output_file_sample_range(
+                    y[labelstart : labelend], # the full range of the label
+                    filepath, #source file,
                     0, #start sample,
-                    window_samples, # end sample
+                    labelend - labelstart, # end sample
                     sr,
-                    window_samples, # increment samples
+                    window_samples, # increment samples,
                     label,
-                    i # the current sample in the file
-                ) 
+                    labelstart #global start sample
+                )
 
-        i += window_samples
-    print ("finished", f)
+            # output this window interval of the original source 
+            if label == 'silence' and labelmaker.render_silence:
+                # print ('arbitrary range', i)
+                output_file_sample_range(
+                        y[i:i+window_samples], # the file
+                        filepath , #source file,
+                        0, #start sample,
+                        window_samples, # end sample
+                        sr,
+                        window_samples, # increment samples
+                        label,
+                        i # the current sample relative to the file
+                    ) 
+
+            i += window_samples
+        print ("finished", f, random_offset)
 
 def process_rawdata():
     for d in os.listdir('Samples'):
